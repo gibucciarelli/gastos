@@ -226,46 +226,49 @@ function repeatLabel(r){
 }
 
 // ---- PROPAGATE RECURRING ITEMS ----
-// When loading a month, inject recurring items from previous months if not already present
+// When loading a month, inject recurring items from all months (including current)
 function injectRecurring(y, m) {
   const key = gk(y, m);
   if(!dt[key]) dt[key] = ld(y, m);
   const existing = dt[key];
+  const daysInTarget = new Date(y, m+1, 0).getDate();
 
-  // Collect all recurring items from ALL stored months
+  // Collect all recurring MASTER items from ALL stored months (including current)
   const allKeys = Object.keys(localStorage).filter(k => k.startsWith('gastos_'));
+  if(!allKeys.includes(key)) allKeys.push(key);
+
   allKeys.forEach(k => {
-    if(k === key) return;
     try {
-      const monthData = JSON.parse(localStorage.getItem(k) || '{}');
+      const isCurrentMonth = k === key;
+      // For current month, use in-memory snapshot to avoid reading stale localStorage
+      const monthData = isCurrentMonth ? JSON.parse(JSON.stringify(existing)) : JSON.parse(localStorage.getItem(k) || '{}');
+      const [, ky, km] = k.match(/gastos_(\d+)_(\d+)/);
+      const srcY = parseInt(ky), srcM = parseInt(km) - 1;
+
       Object.entries(monthData).forEach(([day, items]) => {
         (items || []).forEach(item => {
           if(!item.repeat || item.repeat === 'none') return;
-
-          const [, ky, km] = k.match(/gastos_(\d+)_(\d+)/);
-          const srcY = parseInt(ky), srcM = parseInt(km) - 1;
+          if(item.recurringId) return; // skip copies, only process master items
 
           let shouldAdd = false;
 
           if(item.repeat === 'monthly') {
-            // Add to same day of target month/year if source is different month
-            if(!(srcY === y && srcM === m)) shouldAdd = true;
+            // Only inject from OTHER months into this month
+            if(!isCurrentMonth) shouldAdd = true;
           }
           if(item.repeat === 'weekly') {
-            // Add to all same weekdays in target month
+            // Inject all same-weekday occurrences in target month
             shouldAdd = true;
           }
 
           if(!shouldAdd) return;
 
           const targetDay = parseInt(day);
-          const daysInTarget = new Date(y, m+1, 0).getDate();
 
           if(item.repeat === 'monthly') {
             if(targetDay > daysInTarget) return;
             const dayKey = String(targetDay);
             if(!existing[dayKey]) existing[dayKey] = [];
-            // Don't duplicate
             const alreadyExists = existing[dayKey].some(i => i.recurringId === item.id || i.id === item.id);
             if(!alreadyExists) {
               existing[dayKey].push({
@@ -283,6 +286,8 @@ function injectRecurring(y, m) {
             const srcDate = new Date(srcY, srcM, parseInt(day));
             const srcWeekday = srcDate.getDay();
             for(let d2=1; d2<=daysInTarget; d2++) {
+              // For same month, skip the original day (it's already there as master)
+              if(isCurrentMonth && d2 === targetDay) continue;
               const tDate = new Date(y, m, d2);
               if(tDate.getDay() === srcWeekday) {
                 const dayKey = String(d2);
@@ -309,7 +314,6 @@ function injectRecurring(y, m) {
 
   sd(y, m, existing);
 }
-
 function changeMonth(d2){cM+=d2;if(cM>11){cM=0;cY++;}if(cM<0){cM=11;cY--;}injectRecurring(cY,cM);render();}
 function setTab(t){tab=t;document.getElementById('tabPagar').className='tab'+(t==='pagar'?' active-pagar':'');document.getElementById('tabPago').className='tab'+(t==='pago'?' active-pago':'');renderDays();}
 function dim(y,m){return new Date(y,m+1,0).getDate();}
@@ -389,7 +393,9 @@ function saveItem(){
   if(!d[k])d[k]=[];
   if(eId){d[k]=d[k].map(i=>i.id===eId?{...i,desc,valor,repeat:curRepeat}:i);}
   else{d[k].push({id:Date.now().toString(),desc,valor,pago:false,repeat:curRepeat});}
-  pc();closeModal();renderDays();
+  pc();
+  if(curRepeat !== 'none') { injectRecurring(cY, cM); }
+  closeModal();renderDays();
 }
 
 function ti(day,id){
