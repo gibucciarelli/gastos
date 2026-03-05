@@ -233,14 +233,12 @@ function injectRecurring(y, m) {
   const existing = dt[key];
   const daysInTarget = new Date(y, m+1, 0).getDate();
 
-  // Collect all recurring MASTER items from ALL stored months (including current)
   const allKeys = Object.keys(localStorage).filter(k => k.startsWith('gastos_'));
   if(!allKeys.includes(key)) allKeys.push(key);
 
   allKeys.forEach(k => {
     try {
       const isCurrentMonth = k === key;
-      // For current month, use in-memory snapshot to avoid reading stale localStorage
       const monthData = isCurrentMonth ? JSON.parse(JSON.stringify(existing)) : JSON.parse(localStorage.getItem(k) || '{}');
       const [, ky, km] = k.match(/gastos_(\d+)_(\d+)/);
       const srcY = parseInt(ky), srcM = parseInt(km) - 1;
@@ -253,11 +251,9 @@ function injectRecurring(y, m) {
           let shouldAdd = false;
 
           if(item.repeat === 'monthly') {
-            // Only inject from OTHER months into this month
             if(!isCurrentMonth) shouldAdd = true;
           }
           if(item.repeat === 'weekly') {
-            // Inject all same-weekday occurrences in target month
             shouldAdd = true;
           }
 
@@ -271,11 +267,13 @@ function injectRecurring(y, m) {
             if(!existing[dayKey]) existing[dayKey] = [];
             const alreadyExists = existing[dayKey].some(i => i.recurringId === item.id || i.id === item.id);
             if(!alreadyExists) {
+              // CARTAO: aparece sem valor pois muda todo mes
+              const isCartao = item.desc.toUpperCase().includes('CARTAO') || item.desc.toUpperCase().includes('CART\u00c3O');
               existing[dayKey].push({
                 id: `${item.id}_${y}_${m}`,
                 recurringId: item.id,
                 desc: item.desc,
-                valor: item.valor,
+                valor: isCartao ? 0 : item.valor,
                 pago: false,
                 repeat: 'monthly'
               });
@@ -286,7 +284,6 @@ function injectRecurring(y, m) {
             const srcDate = new Date(srcY, srcM, parseInt(day));
             const srcWeekday = srcDate.getDay();
             for(let d2=1; d2<=daysInTarget; d2++) {
-              // For same month, skip the original day (it's already there as master)
               if(isCurrentMonth && d2 === targetDay) continue;
               const tDate = new Date(y, m, d2);
               if(tDate.getDay() === srcWeekday) {
