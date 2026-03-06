@@ -121,6 +121,12 @@
   /* TOAST */
   .toast { position:fixed; bottom:30px; left:50%; transform:translateX(-50%) translateY(80px); background:#2D4A38; color:#fff; padding:10px 20px; border-radius:20px; font-size:13px; font-weight:600; z-index:999; transition:transform 0.3s; white-space:nowrap; }
   .toast.show { transform:translateX(-50%) translateY(0); }
+
+  .fixos-label { font-size:12px; color:var(--text); font-weight:700; }
+  .fixos-val { font-size:16px; font-weight:700; color:var(--green); }
+
+  .fixos-label { font-size:12px; color:var(--text); font-weight:700; letter-spacing:0.5px; text-transform:uppercase; }
+  .fixos-val { font-size:16px; font-weight:700; color:var(--green); }
 </style>
 </head>
 <body>
@@ -226,7 +232,6 @@ function repeatLabel(r){
 }
 
 // ---- PROPAGATE RECURRING ITEMS ----
-// When loading a month, inject recurring items from all months (including current)
 function injectRecurring(y, m) {
   const key = gk(y, m);
   if(!dt[key]) dt[key] = ld(y, m);
@@ -246,17 +251,11 @@ function injectRecurring(y, m) {
       Object.entries(monthData).forEach(([day, items]) => {
         (items || []).forEach(item => {
           if(!item.repeat || item.repeat === 'none') return;
-          if(item.recurringId) return; // skip copies, only process master items
+          if(item.recurringId) return;
 
           let shouldAdd = false;
-
-          if(item.repeat === 'monthly') {
-            if(!isCurrentMonth) shouldAdd = true;
-          }
-          if(item.repeat === 'weekly') {
-            shouldAdd = true;
-          }
-
+          if(item.repeat === 'monthly') { if(!isCurrentMonth) shouldAdd = true; }
+          if(item.repeat === 'weekly') { shouldAdd = true; }
           if(!shouldAdd) return;
 
           const targetDay = parseInt(day);
@@ -267,7 +266,6 @@ function injectRecurring(y, m) {
             if(!existing[dayKey]) existing[dayKey] = [];
             const alreadyExists = existing[dayKey].some(i => i.recurringId === item.id || i.id === item.id);
             if(!alreadyExists) {
-              // CARTAO: aparece sem valor pois muda todo mes
               const isCartao = item.desc.toUpperCase().includes('CARTAO') || item.desc.toUpperCase().includes('CART\u00c3O');
               existing[dayKey].push({
                 id: `${item.id}_${y}_${m}`,
@@ -342,8 +340,11 @@ function renderDays(){
     h+=`</div>`;
   }
   const tg=ai.filter(i=>i.pago).reduce((s,i)=>s+i.valor,0),tp=ai.filter(i=>!i.pago).reduce((s,i)=>s+i.valor,0);
+  const isCartaoFn=i=>i.desc.toUpperCase().includes('CARTAO')||i.desc.toUpperCase().includes('CART\u00c3O');
+  const tCartao=ai.filter(isCartaoFn).reduce((s,i)=>s+i.valor,0);
+  const tFixos=(tg+tp)-tCartao;
   if(tab==='pago'&&cg===0) h+=`<div class="empty-tab"><div style="font-size:36px;margin-bottom:10px">✅</div><p>Nenhum item pago ainda.</p></div>`;
-  h+=`<div class="summary"><div class="summary-row"><span class="summary-label">Total a pagar</span><span class="summary-val orange">${brl(tp)}</span></div><div class="summary-divider"></div><div class="summary-row"><span class="summary-label">Total pago</span><span class="summary-val green">${brl(tg)}</span></div><div class="summary-divider thick"></div><div class="summary-row"><span class="summary-label total-label">Gasto total do mês</span><span class="summary-val total-val">${brl(tg+tp)}</span></div></div>`;
+  h+=`<div class="summary"><div class="summary-row"><span class="summary-label">Total a pagar</span><span class="summary-val orange">${brl(tp)}</span></div><div class="summary-divider"></div><div class="summary-row"><span class="summary-label">Total pago</span><span class="summary-val green">${brl(tg)}</span></div><div class="summary-divider thick"></div><div class="summary-row"><span class="summary-label total-label">Gasto total do mês</span><span class="summary-val total-val">${brl(tg+tp)}</span></div><div class="summary-divider"></div><div class="summary-row"><span class="summary-label fixos-label">💰 Gastos fixos mensais</span><span class="summary-val fixos-val">${brl(tFixos)}</span></div></div>`;
   document.getElementById('daysList').innerHTML=h;
 }
 
